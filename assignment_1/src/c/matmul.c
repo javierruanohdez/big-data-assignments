@@ -4,28 +4,38 @@
  * Responsibilities are split into small functions (SOLID-lite):
  *   1. load_matrices()   -> read A and B from the shared binary file
  *   2. multiply()        -> the O(n^3) triple-loop kernel (the ONLY timed part)
- *   3. checksum()        -> a simple sum of C, used to cross-check languages
- *   4. main()            -> orchestration + the timer boundary
+ *   3. now_seconds()     -> monotonic clock used for the timer boundary
+ *   4. checksum()        -> a simple sum of C, used to cross-check languages
+ *   5. save_matrix()     -> optionally write C to disk for verify_correctness.py
+ *   6. main()            -> orchestration + the timer boundary
  *
- * Input file format (written by common/data_generator.py):
- *   int64 n | n*n float64 (A, row-major) | n*n float64 (B, row-major)
+ * Matrix file format (shared by all languages, see common/data_generator.py):
+ *   Input : int64 n | n*n float64 (A, row-major) | n*n float64 (B, row-major)
+ *   Output: int64 n | n*n float64 (C, row-major)
  *   All values little-endian.
  *
- * Memory layout note (to document in the report):
- *   Matrices are stored as ONE contiguous block of n*n doubles in row-major
- *   order, element (i, j) at index i*n + j. This is the natural C layout.
- *   Java (double[][]) and Python (list of lists) may store rows separately,
- *   which is an unavoidable language-specific difference.
+ * Memory layout note:
+ *   Each matrix is ONE contiguous block of n*n doubles in row-major order,
+ *   element (i, j) at index i*n + j. Java (flat double[]) and Python (flat
+ *   list) use the same indexing; only Python stores boxed float objects.
  *
  * Build (flags will be fixed and justified in the README):
  *   gcc -O2 -std=c11 -Wall -Wextra -o matmul matmul.c
  * Run:
- *   ./matmul data/matrices_n100.bin
+ *   ./matmul data/matrices_n100.bin [--output result_c.bin]
+ *
+ * Output (one line on stdout, parsed by run_benchmark.py):
+ *   n=<n> time_s=<seconds> checksum=<sum of C>
  */
+
+/* Needed so <time.h> exposes clock_gettime() under strict -std=c11. */
+#define _POSIX_C_SOURCE 199309L
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 /* ------------------------------------------------------------------ */
 /* Data loading                                                        */
@@ -93,7 +103,7 @@ static int load_matrices(const char *path, int64_t *n_out,
  *
  * Why i-j-k: it is the direct translation of the definition
  *     C[i][j] = sum_k A[i][k] * B[k][j]
- * and the SAME loop order will be used in Python and Java, so all three
+ * and the SAME loop order is used in Python and Java, so all three
  * languages do identical work. (Cache-friendlier orders like i-k-j exist,
  * but changing the order would break the fair comparison.)
  *
@@ -115,7 +125,25 @@ static void multiply(const double *a, const double *b, double *c, int64_t n)
 }
 
 /* ------------------------------------------------------------------ */
-/* Result check                                                        */
+/* Timer                                                               */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Current time in seconds from CLOCK_MONOTONIC.
+ * A monotonic clock never jumps backwards (unlike the wall clock, which
+ * NTP can adjust), so the difference of two readings is a valid duration.
+ * This is the same kind of clock as Python's perf_counter_ns() and
+ * Java's System.nanoTime().
+ */
+static double now_seconds(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
+/* ------------------------------------------------------------------ */
+/* Result check and output                                             */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -134,14 +162,46 @@ static double checksum(const double *c, int64_t n)
     return total;
 }
 
+/* Writes n and C to `path` (same little-endian format as the input). */
+static int save_matrix(const char *path, const double *c, int64_t n)
+{
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        fprintf(stderr, "Error: cannot open output file '%s'\n", path);
+        return -1;
+    }
+    size_t count = (size_t)n * (size_t)n;
+    int ok = fwrite(&n, sizeof(int64_t), 1, file) == 1 &&
+             fwrite(c, sizeof(double), count, file) == count;
+    fclose(file);
+    if (!ok) {
+        fprintf(stderr, "Error: failed to write '%s'\n", path);
+        return -1;
+    }
+    return 0;
+}
+
 /* ------------------------------------------------------------------ */
 /* Orchestration                                                       */
 /* ------------------------------------------------------------------ */
 
 int main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <matrices_file.bin>\n", argv[0]);
+    /* Arguments: <input.bin> [--output <result.bin>] */
+    const char *input_path = NULL;
+    const char *output_path = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
+            output_path = argv[++i];
+        } else if (input_path == NULL) {
+            input_path = argv[i];
+        } else {
+            input_path = NULL;   /* unexpected extra argument */
+            break;
+        }
+    }
+    if (input_path == NULL) {
+        fprintf(stderr, "Usage: %s <matrices_file.bin> [--output <result.bin>]\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -149,7 +209,7 @@ int main(int argc, char *argv[])
     int64_t n = 0;
     double *a = NULL;
     double *b = NULL;
-    if (load_matrices(argv[1], &n, &a, &b) != 0) {
+    if (load_matrices(input_path, &n, &a, &b) != 0) {
         return EXIT_FAILURE;
     }
 
@@ -163,21 +223,25 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    /* ============ TIMED REGION START ============
-     * Next iteration: read a monotonic clock here
-     * (clock_gettime(CLOCK_MONOTONIC, ...)) and repeat the call
-     * for the required number of repetitions. */
+    /* ============ TIMED REGION START ============ */
+    double start = now_seconds();
 
     multiply(a, b, c, n);
 
-    /* ============ TIMED REGION END ==============
-     * Next iteration: read the clock again and record the elapsed time. */
+    double end = now_seconds();
+    /* ============ TIMED REGION END ============== */
 
-    /* 3. Report - NOT timed. */
-    printf("n=%lld checksum=%.10e\n", (long long)n, checksum(c, n));
+    /* 3. Report and (optionally) save - NOT timed. */
+    printf("n=%lld time_s=%.6f checksum=%.10e\n",
+           (long long)n, end - start, checksum(c, n));
+
+    int status = EXIT_SUCCESS;
+    if (output_path != NULL && save_matrix(output_path, c, n) != 0) {
+        status = EXIT_FAILURE;
+    }
 
     free(a);
     free(b);
     free(c);
-    return EXIT_SUCCESS;
+    return status;
 }

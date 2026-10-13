@@ -6,10 +6,12 @@
  *   2. multiply()      -> the O(n^3) triple-loop kernel (the ONLY timed part)
  *   3. warmUp()        -> untimed runs so the JIT compiler can optimize multiply()
  *   4. checksum()      -> a simple sum of C, used to cross-check languages
- *   5. main()          -> orchestration + the timer boundary
+ *   5. saveMatrix()    -> optionally write C to disk for verify_correctness.py
+ *   6. main()          -> orchestration + the timer boundary
  *
- * Input file format (written by common/data_generator.py):
- *   int64 n | n*n double (A, row-major) | n*n double (B, row-major)
+ * Matrix file format (shared by all languages, see common/data_generator.py):
+ *   Input : int64 n | n*n double (A, row-major) | n*n double (B, row-major)
+ *   Output: int64 n | n*n double (C, row-major)
  *   All values little-endian.
  *
  * Memory layout:
@@ -21,7 +23,10 @@
  *
  * Build and run (from the repository root):
  *   javac -d assignment_1/build/java assignment_1/src/java/MatMul.java
- *   java -cp assignment_1/build/java MatMul data/matrices_n100.bin [warmupRuns]
+ *   java -cp assignment_1/build/java MatMul data/matrices_n100.bin [--warmup 3] [--output result_java.bin]
+ *
+ * Output (one line on stdout, parsed by run_benchmark.py):
+ *   n=<n> warmup_runs=<w> time_s=<seconds> checksum=<sum of C>
  */
 
 import java.io.IOException;
@@ -36,7 +41,7 @@ public class MatMul {
      * Default number of untimed warm-up runs. Each run executes the full
      * kernel, so the hot inner loop runs millions of times - far beyond the
      * JIT's compilation thresholds - and the timed run uses fully optimized
-     * machine code. Can be overridden with the second command-line argument.
+     * machine code. Can be overridden with the --warmup option.
      */
     private static final int DEFAULT_WARMUP_RUNS = 3;
 
@@ -150,19 +155,46 @@ public class MatMul {
         return total;
     }
 
+    /** Writes n and C to disk (same little-endian format as the input). */
+    static void saveMatrix(Path path, double[] c, int n) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES + c.length * Double.BYTES)
+                                      .order(ByteOrder.LITTLE_ENDIAN);
+        buffer.putLong(n);
+        buffer.asDoubleBuffer().put(c);
+        Files.write(path, buffer.array());
+    }
+
     // ------------------------------------------------------------------
     // Orchestration
     // ------------------------------------------------------------------
 
+    private static void printUsageAndExit() {
+        System.err.println("Usage: java MatMul <matrices_file.bin> [--warmup N] [--output <result.bin>]");
+        System.exit(1);
+    }
+
     public static void main(String[] args) throws IOException {
-        if (args.length < 1 || args.length > 2) {
-            System.err.println("Usage: java MatMul <matrices_file.bin> [warmupRuns]");
-            System.exit(1);
+        // Arguments: <input.bin> [--warmup N] [--output <result.bin>]
+        String inputPath = null;
+        String outputPath = null;
+        int warmupRuns = DEFAULT_WARMUP_RUNS;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--warmup") && i + 1 < args.length) {
+                warmupRuns = Integer.parseInt(args[++i]);
+            } else if (args[i].equals("--output") && i + 1 < args.length) {
+                outputPath = args[++i];
+            } else if (inputPath == null) {
+                inputPath = args[i];
+            } else {
+                printUsageAndExit();
+            }
         }
-        int warmupRuns = (args.length == 2) ? Integer.parseInt(args[1]) : DEFAULT_WARMUP_RUNS;
+        if (inputPath == null) {
+            printUsageAndExit();
+        }
 
         // 1. Load inputs - NOT timed (guidelines: inputs prepared outside).
-        Matrices m = loadMatrices(Path.of(args[0]));
+        Matrices m = loadMatrices(Path.of(inputPath));
 
         // 2. Allocate the output - NOT timed, so we measure only arithmetic.
         double[] c = new double[m.n * m.n];
@@ -180,9 +212,13 @@ public class MatMul {
         long endNs = System.nanoTime();
         // ============ TIMED REGION END ==============
 
-        // 4. Report - NOT timed.
+        // 4. Report and (optionally) save - NOT timed.
         double elapsedSeconds = (endNs - startNs) / 1e9;
         System.out.printf("n=%d warmup_runs=%d time_s=%.6f checksum=%.10e%n",
                 m.n, warmupRuns, elapsedSeconds, checksum(c));
+
+        if (outputPath != null) {
+            saveMatrix(Path.of(outputPath), c, m.n);
+        }
     }
 }
