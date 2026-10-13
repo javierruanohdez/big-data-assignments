@@ -1,0 +1,21 @@
+# Python environments
+venv/
+.env
+__pycache__/
+*.pyc
+
+# Java
+*.class
+
+# C
+*.out
+*.exe
+*.o
+
+# Data
+data/*.csv
+data/*.bin
+results/*.csv
+
+# VS Code
+.vscode/
