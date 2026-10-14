@@ -1,0 +1,5 @@
+# Python packages for the analysis step (plot_results.py).
+# The benchmark itself (matmul.py, run_benchmark.py, verify_correctness.py)
+# uses only the standard library.
+pandas>=2.0
+matplotlib>=3.7   # 3.7+ needed for legends placed "outside" the plot area
