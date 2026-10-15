@@ -1,5 +1,14 @@
-# Python packages for the analysis step (plot_results.py).
-# The benchmark itself (matmul.py, run_benchmark.py, verify_correctness.py)
-# uses only the standard library.
-pandas>=2.0
-matplotlib>=3.7   # 3.7+ needed for legends placed "outside" the plot area
+# Python packages for the analysis step only (plot_results.py).
+# The benchmark itself (matmul.py, run_benchmark.py, verify_correctness.py,
+# data_generator.py) uses only the Python standard library.
+#
+# Requires Python 3.10 or newer. Lower bounds are the oldest versions with the
+# features the script uses; upper bounds exclude future major versions, which
+# may break the API.
+#
+# The figures and statistics in assignment_1/results/ were produced with
+# pandas 3.0.5, Matplotlib 3.11.2 and NumPy 2.5.3.
+
+numpy>=1.23,<3        # log-log fit (polyfit) and reference curves
+pandas>=2.0,<4        # loading measurements.csv, median / IQR per group
+matplotlib>=3.7,<4    # 3.7+ needed for legends placed "outside" the plot area

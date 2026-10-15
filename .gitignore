@@ -1,24 +1,54 @@
-# Python environments
+# =============================================================================
+#  .gitignore - Big Data assignments
+#  Rule of thumb: commit source code, raw measurements, figures and reports;
+#  ignore everything that the scripts regenerate or that is machine-specific.
+# =============================================================================
+
+# --- Generated benchmark inputs ----------------------------------------------
+# Shared input matrices written by common/data_generator.py (regenerated
+# automatically by run_benchmark.py; up to 16 MB each).
+/data/
+
+# --- Build output --------------------------------------------------------------
+# Compiled C/Java programs and correctness-check files of every assignment.
+assignment_*/build/
+
+# --- Python --------------------------------------------------------------------
 venv/
+.venv/
 .env
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 
-# Java
+# --- Java ----------------------------------------------------------------------
 *.class
 
-# C
-*.out
-*.exe
+# --- C -------------------------------------------------------------------------
 *.o
+*.exe
+a.out
 
-# Data
-data/*.csv
-data/*.bin
-results/*.csv
+# --- LaTeX build files (reports) -------------------------------------------------
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.lof
+*.lot
+*.out
+*.synctex.gz
+*.synctex(busy)
+*.toc
 
-# VS Code
+# --- Editors and IDEs ----------------------------------------------------------
 .vscode/
+.idea/
+*.iml
 
-# Build output (compiled C/Java programs, verification files)
-assignment_1/build/
+# --- Operating system files ------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
