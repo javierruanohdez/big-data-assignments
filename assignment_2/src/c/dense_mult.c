@@ -46,8 +46,9 @@
  *                [--block-size B] [--output result.bin]
  *
  * Output (one line on stdout, space-separated key=value pairs):
- *   algo=reordered n=500 time_s=0.081234 checksum=1.2345678901e+02
- *   algo=tiled n=500 block_size=64 time_s=0.071234 checksum=1.2345678901e+02
+ *   algo=reordered n=500 time_s=0.081234567 checksum=1.2345678901e+02
+ *   algo=tiled n=500 block_size=64 time_s=0.071234567 checksum=1.2345678901e+02
+ *   Times have 9 decimals, i.e. the nanosecond resolution of CLOCK_MONOTONIC.
  */
 
 /* Needed so <time.h> exposes clock_gettime() under strict -std=c11. */
@@ -88,7 +89,7 @@
 #endif
 
 /* ------------------------------------------------------------------ */
-/* Data loading (unchanged from Assignment 1)                          */
+/* Data loading (as in Assignment 1, plus a size check on the header)  */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -108,14 +109,29 @@ static int load_matrices(const char *path, int64_t *n_out,
         return -1;
     }
 
+    /*
+     * Never trust the header: check n BEFORE computing n*n*8.
+     * A corrupt n could make that product overflow size_t and wrap around
+     * to a small number. malloc() would then succeed with a block that is
+     * far too small, and fread() and the kernels would write past its end.
+     *   1. 0 < n <= INT32_MAX (the same limit as sparse_mult.c), so n*n
+     *      fits in a 64-bit size_t;
+     *   2. n*n*8 bytes must also fit in size_t.
+     */
     int64_t n = 0;
-    if (fread(&n, sizeof(int64_t), 1, file) != 1 || n <= 0) {
-        fprintf(stderr, "Error: invalid header in '%s'\n", path);
+    if (fread(&n, sizeof(int64_t), 1, file) != 1 || n <= 0 || n > INT32_MAX) {
+        fprintf(stderr, "Error: invalid header in '%s' (need 0 < n <= %d)\n",
+                path, INT32_MAX);
         fclose(file);
         return -1;
     }
 
     size_t count = (size_t)n * (size_t)n;   /* number of elements per matrix */
+    if (count > SIZE_MAX / sizeof(double)) {
+        fprintf(stderr, "Error: n=%lld is too large for this machine\n", (long long)n);
+        fclose(file);
+        return -1;
+    }
     double *a = malloc(count * sizeof(double));
     double *b = malloc(count * sizeof(double));
     if (a == NULL || b == NULL) {
@@ -561,12 +577,14 @@ int main(int argc, char *argv[])
     /* ============ TIMED REGION END ============== */
 
     /* 3. Report and (optionally) save - NOT timed.
-     *    block_size is printed only where it has a meaning. */
+     *    block_size is printed only where it has a meaning.
+     *    %.9f keeps the nanosecond resolution of the clock (%.6f would round
+     *    to microseconds, too coarse for the fastest runs). */
     printf("algo=%s n=%lld ", algorithm_name(opts.algo), (long long)n);
     if (opts.algo == ALGO_TILED) {
         printf("block_size=%lld ", (long long)opts.block_size);
     }
-    printf("time_s=%.6f checksum=%.10e\n", end - start, checksum(c, n));
+    printf("time_s=%.9f checksum=%.10e\n", end - start, checksum(c, n));
 
     int status = EXIT_SUCCESS;
     if (opts.output_path != NULL && save_matrix(opts.output_path, c, n) != 0) {

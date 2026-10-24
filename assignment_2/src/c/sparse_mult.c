@@ -29,10 +29,11 @@
  *
  * Output (one line on stdout, space-separated key=value pairs):
  *   algo=csr n=500 nnz_A=25000 nnz_B=25000 nnz_C=118000 csr_bytes=2178012
- *   conversion_time_s=0.001234 time_s=0.004567 checksum=1.2345678901e+02
+ *   conversion_time_s=0.001234567 time_s=0.004567890 checksum=1.2345678901e+02
  *   (printed on a single line). csr_bytes is the storage of the three CSR
- *   matrices A, B and C. --output writes C in the dense output format, so
- *   verify_correctness.py can compare it with the dense kernels directly.
+ *   matrices A, B and C. Times have 9 decimals (nanosecond resolution).
+ *   --output writes C in the dense output format, so verify_correctness.py
+ *   can compare it with the dense kernels directly.
  */
 
 /* Needed so <time.h> exposes clock_gettime() under strict -std=c11. */
@@ -630,8 +631,11 @@ int main(int argc, char *argv[])
     csr_bytes = csr_storage_bytes(&a_csr) + csr_storage_bytes(&b_csr)
               + csr_storage_bytes(&c_csr);
 
+    /* %.9f keeps the nanosecond resolution of the clock: at 99.9 % sparsity
+     * the multiplication takes only tens of microseconds, so %.6f (1 us
+     * steps) would limit the precision of those runs to about 1-2 %. */
     printf("algo=csr n=%lld nnz_A=%lld nnz_B=%lld nnz_C=%lld csr_bytes=%lld "
-           "conversion_time_s=%.6f time_s=%.6f checksum=%.10e\n",
+           "conversion_time_s=%.9f time_s=%.9f checksum=%.10e\n",
            (long long)n, (long long)a_csr.nnz, (long long)b_csr.nnz,
            (long long)c_csr.nnz, (long long)csr_bytes,
            conversion_end - conversion_start, multiply_end - multiply_start,
