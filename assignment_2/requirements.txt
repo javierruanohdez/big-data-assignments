@@ -1,0 +1,15 @@
+# Python packages for the analysis step only (plot_results.py).
+# The benchmark itself (data_generator.py, run_benchmark.py,
+# verify_correctness.py) uses only the Python standard library, and the
+# kernels are written in C.
+#
+# Requires Python 3.10 or newer. Lower bounds are the oldest versions with the
+# features the script uses; upper bounds exclude future major versions, which
+# may break the API.
+#
+# plot_results.py was developed and tested with pandas 3.0.5,
+# Matplotlib 3.11.2 and NumPy 2.5.3.
+
+numpy>=1.23,<3        # log-log fit (polyfit), fill-in model, reference curves
+pandas>=2.0,<4        # loading measurements.csv, median / IQR per group
+matplotlib>=3.7,<4    # 3.7+ needed for legends placed "outside" the plot area
