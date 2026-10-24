@@ -86,14 +86,14 @@ moves from machine to machine.
 A **Linux shell** is required: GNU `time` does not exist on native Windows, so use
 WSL on Windows (see the notes under [Quick Start](#quick-start)).
 
-| Tool | Minimum version | Used in this study | Purpose | Verify with |
-|---|---|---|---|---|
-| **Python** (CPython) | 3.10 | [TODO] | Scripts and analysis | `python3 --version` |
-| **GCC** | C11 support | [TODO] | Compiles the C kernels | `gcc --version` |
-| **GNU time** | any | system package | Measures peak memory (max RSS) | `/usr/bin/time --version` |
-| **Git** | any | system package | Clones the repository | `git --version` |
-| **pandas / Matplotlib** | 2.0 / 3.7 | [TODO] | Statistics and figures (`requirements.txt`) | `pip show pandas matplotlib` |
-| *LaTeX (optional)* | TeX Live with `IEEEtran` | — | Builds the PDF report | `pdflatex --version` |
+| Tool | Minimum version | Purpose |
+|---|---|---|
+| **Python** (CPython) | 3.10 | Scripts and analysis |
+| **GCC** | C11 support | Compiles the C kernels |
+| **GNU time** | any | Measures peak memory (max RSS) |
+| **Git** | any | Clones the repository |
+| **pandas / Matplotlib** | 2.0 / 3.7 | Statistics and figures (`requirements.txt`) |
+| *LaTeX (optional)* | TeX Live with `IEEEtran` | Builds the PDF report |
 
 The benchmark itself (kernels, data generator, harness, correctness checks) uses **only
 the Python standard library**; pandas and Matplotlib are needed only for the analysis step.
@@ -141,19 +141,6 @@ and runs both experiments, writing one row per run to
 
 - **Part A:** 5 sizes × 3 dense kernels × 5 repetitions = 75 runs
 - **Part B:** 12 sparsity levels × 2 kernels (tiled, CSR) × 5 repetitions = 120 runs
-
-Total duration on the test machine: roughly **4 minutes**. This is an estimate: the
-measured kernels and conversions alone add up to 2.8 minutes (most of it the baseline
-at $n = 2000$), and generating the inputs the first time adds about half a minute.
-
-Optional arguments, e.g. for a quick test run (the CSV is overwritten, so write it
-elsewhere):
-
-```bash
-python3 assignment_2/run_benchmark.py --parts B --sparsities 0.5 0.9 --repetitions 3 \
-    --output assignment_2/results/quick_test.csv
-python3 assignment_2/run_benchmark.py --part-a-sizes 100 250 --part-b-size 500 --timeout 300
-```
 
 ### 4. Generate statistics and figures
 
@@ -230,134 +217,6 @@ For the same input file, all four kernels print the same checksum. Add
 
 </details>
 
-### Outputs
-
-| File | Content |
-|---|---|
-| `results/measurements.csv` | Raw data, one row per run: `experiment_part, size, sparsity, algorithm, repetition, time_s, conversion_time_s, memory_mb, csr_bytes, nnz_C, status`. An empty cell means "does not apply" (e.g. the conversion time of a dense kernel) or "no measurement" (timeout or error) |
-| `results/results_summary.md` | Key results; Part A: median and IQR of time and memory, speed-ups, scaling exponents, largest feasible $n$; Part B: multiply, conversion and total times, crossover points, fill-in and memory; excluded runs |
-| `results/part_a_time_vs_size.pdf` / `.png` | Part A: kernel time vs. $n$ (log-log) with an $O(n^3)$ reference line |
-| `results/part_a_memory_vs_size.pdf` / `.png` | Part A: peak RSS vs. $n$ (log-log) with the size of the three matrices ($24n^2$ bytes) |
-| `results/part_b_time_vs_sparsity.pdf` / `.png` | Part B: dense tiled vs. CSR, with the CSR conversion stacked on top of the CSR multiplication and the crossover marked |
-| `results/part_b_fill_in.pdf` / `.png` | Part B: density of the result, $\mathrm{nnz}(C)/n^2$, vs. sparsity, with the random-matrix model and the input density |
-
-Use the PDF figures in LaTeX at column width (`\includegraphics[width=\columnwidth]{...}`),
-which gives the intended printed text sizes. The figure style is defined in
-[`common/plotting_style.md`](../common/plotting_style.md).
-
----
-
-## Experimental Protocol & Parameters
-
-### Fixed experiment parameters
-
-All values are defined once in [`benchmark_config.py`](benchmark_config.py).
-
-| Parameter | Value | Justification |
-|---|---|---|
-| Part A sizes $n$ | 100, 250, 500, 1000, 2000 | Roughly ×2 steps. At $n = 2000$, one matrix (32 MB) is far larger than a typical last-level cache, the regime the optimisations target. After a timeout, larger sizes are skipped for that kernel, so the list can be extended to find the largest feasible $n$ |
-| Part A kernels | baseline, reordered, tiled | The Assignment 1 baseline plus two distinct optimisations |
-| Part B size | $n = 1000$ | The dense kernel takes about 0.4 s: long enough to time reliably, short enough for 12 levels × 5 repetitions |
-| Part B sparsity levels | 0, 0.3, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.999 | The guideline levels (50, 90, 95, 99 %) plus a finer grid around the crossover and the conversion-dominated end |
-| Part B kernels | tiled vs. CSR | Tiled is the fastest dense kernel at $n = 1000$ in Part A, so CSR is compared with the best dense alternative |
-| Measured repetitions | 5 per configuration | Minimum required; median and IQR are robust with 5 values |
-| Time budget | 300 s per run | Hard limit; a run that exceeds it is recorded as `timeout` with no time |
-| Input seed | 42 | Same matrices for every kernel and every run |
-| Values | uniform in $[-1, 1)$, plus exact zeros | Keeps sums well scaled for floating-point comparisons |
-| Zeros | exactly $\mathrm{round}(s \cdot n^2)$ per matrix, at random positions | Exact sparsity axis. A separate random generator chooses the positions, so the non-zero values never change, the levels are nested (the zeros at 90 % are a subset of those at 95 %) and $s = 0$ reproduces the Assignment 1 inputs bit for bit |
-| Tile size $b$ | 64 | One tile = 32 KiB (about one L1 data cache); the three tiles in use (96 KiB) fit in L2 |
-| C flags | `gcc -O2 -std=c11 -Wall -Wextra` | The same flags as Assignment 1, for all four kernels. `-O3` adds auto-vectorisation, which helps the stride-1 kernels much more than the baseline and would mix a compiler effect into the comparison |
-
-### Part A: dense optimisations
-
-All three kernels perform the same $n^3$ multiply-adds, and every $C_{ij}$ even receives
-its terms in the same order ($k = 0, 1, \dots, n-1$). The results are therefore
-bit-identical, and any speed difference comes from the **memory hierarchy** alone.
-Matrices are flat, row-major arrays: moving along a row is the next address, moving
-down a column jumps $8n$ bytes.
-
-| Kernel | Loop order | Innermost loop | Why it is faster (or slower) |
-|---|---|---|---|
-| Baseline | i-j-k | walks a row of $A$ (stride 1) and a **column** of $B$ (stride $n$) | The Assignment 1 kernel. Each 64-byte cache line of $B$ delivers one useful double out of eight, and for $n \geq 512$ every step lands on a new 4 KiB page |
-| Reordered | i-k-j | walks a row of $B$ and a row of $C$ (both stride 1); $A_{ik}$ stays in a register | Row $i$ of $C$ = $\sum_k A_{ik} \cdot$ (row $k$ of $B$). Every cache line is fully used and the hardware prefetcher sees two sequential streams. Remaining weakness: all of $B$ is streamed again for every row $i$ |
-| Tiled | tiles $ii$-$jj$-$kk$ of $b \times b$, then i-k-j inside | row segments of one tile of $B$ and one tile of $C$ | Each tile of $B$ is reused $b$ times while it is still in cache, which cuts the memory traffic from about $n^3$ to about $2n^3/b$ elements. The $C$ tile stays in cache until it is complete |
-
-### Part B: sparse storage (CSR, Gustavson's algorithm)
-
-- **Format.** CSR stores only the non-zeros, row by row, in three arrays: `values`,
-  `col_idx` (32-bit) and `row_ptr` (row $i$ owns positions `row_ptr[i]` to
-  `row_ptr[i+1] - 1`). That is 12 bytes per non-zero plus $8(n+1)$ bytes, versus $8n^2$
-  for a dense matrix.
-- **Conversion** (timed as `conversion_time_s`, for $A$ and $B$ together). Two passes over
-  the dense matrix: count the non-zeros of each row into `row_ptr`, allocate exactly, then
-  copy. It costs $O(n^2)$ **whatever the sparsity**, because every zero must still be
-  looked at.
-- **Multiplication** (timed as `time_s`). Gustavson's row-by-row algorithm with a dense
-  sparse accumulator: row $i$ of $C$ is the sum of the rows $k$ of $B$ selected by the
-  non-zeros $A_{ik}$. The work is proportional to the number of non-zero products,
-  about $d^2 n^3$ for density $d = 1 - s$ (e.g. 100× fewer multiply-adds than dense at
-  $s = 0.9$), but each product pays for an indirect access and a branch. The output size is
-  not known in advance; it is bounded cheaply from the row lengths, allocated once inside
-  the timer, and exact cancellations to $0.0$ are dropped, so `nnz_C` is the true number
-  of non-zeros.
-- **Fill-in.** A non-zero $A_{ik}$ spreads a whole row of $B$ into row $i$ of $C$, so the
-  result is much denser than the inputs. For random inputs,
-  $P(C_{ij} \neq 0) = 1 - (1 - d^2)^n$; the fill-in figure compares this model with the
-  measured $\mathrm{nnz}(C)$.
-- **Crossover.** The sparsity $s^*$ from which the CSR median stays below the dense tiled
-  median at every higher level, interpolated (on the log of the time ratio) between the
-  two measured levels around it. It is reported for the CSR total (multiply + conversion),
-  for the multiply alone, and for the point where the conversion outweighs the multiply.
-
-### Measurement method
-
-- **Time:** each program measures only its kernel with `clock_gettime(CLOCK_MONOTONIC)` and
-  prints it with nanosecond resolution. Loading the input, allocating and pre-faulting
-  the dense result, and process start-up are outside the timed regions. `sparse_mult` has
-  **two separate timed regions**: the conversion of $A$ and $B$, then the multiplication.
-- **Memory:** peak resident set size (max RSS) of the whole process, measured by GNU time
-  (`/usr/bin/time -v`). For CSR it includes the dense input buffers read at the start,
-  because the shared inputs are stored densely; `csr_bytes` therefore reports the storage
-  of the CSR arrays of $A$, $B$ and $C$ separately.
-- **Repetitions:** every repetition is a fresh process, so each one starts from the same
-  state and its peak RSS belongs to exactly one run.
-- **Statistics:** median and interquartile range (IQR = Q3 − Q1, pandas linear
-  interpolation) per configuration. The CSR total is added per run before taking the
-  median. Runs with status `timeout`, `error` or `mismatch` are excluded from the
-  statistics and listed separately in the summary.
-- **Consistency guard:** for the same input file, all kernels must print the same
-  checksum; a run that disagrees is recorded as `mismatch`, so a wrong result can never
-  enter the statistics.
-
-### Correctness checks
-
-`verify_correctness.py` compares the result of every kernel against an independent,
-correctly rounded reference (`math.fsum`):
-
-| Case | Expected result |
-|---|---|
-| Identity: $A \times I$ ($I$ is itself sparse) | exactly $A$ |
-| Zero: $A \times 0$ ($B$ has no non-zeros) | exactly $0$, and `nnz_C = 0` |
-| Known 3×3 product | hand-computed integer matrix |
-| Random $n = 10$, dense | `math.fsum` reference |
-| Random $n = 100$ at sparsity 0, 0.5, 0.9, 0.99 | `math.fsum` reference; $n > b$ exercises full and partial tiles, 0.99 has many empty rows |
-
-An element passes if `|x - ref| <= ABS_TOL + REL_TOL * |ref|`, with `REL_TOL = 1e-12` and
-`ABS_TOL = 100 * n^2 * 2^-53`, derived from the standard dot-product rounding-error bound.
-For CSR, the printed `nnz_A`, `nnz_B` and `nnz_C` must match the actual counts exactly.
-All 32 checks pass with a largest error of 1.1e-14, and every kernel's result is
-bit-identical to the baseline's.
-
-### Implementation notes
-
-| Topic | Decision |
-|---|---|
-| Inlining | Every kernel is marked `noinline`. When GCC inlined the six-loop tiled kernel into `main()`, it ran out of registers and reloaded a pointer from the stack in every inner iteration, which made it about 2.5× slower |
-| Dense output | Filled with NaN before the timer: the memory pages are mapped outside the timed region, and any element a kernel forgot to write would turn the checksum into `nan` |
-| CSR indices | 32-bit column indices (4 bytes per non-zero instead of 8); the header check enforces $n \leq 2^{31} - 1$ |
-| CSR output | Columns inside a row of $C$ are left in first-touch order (CSR does not require sorting); the checksum is still computed in row-major order, so it matches the dense kernels exactly |
-| Robustness | Both programs validate the file header before allocating, check every allocation, and free all memory on every error path |
-
 ---
 
 ## Reproducibility & Test Environment
@@ -365,18 +224,17 @@ bit-identical to the baseline's.
 > All results and conclusions apply **only** to this machine and configuration.
 
 | Item | Value |
-|---|---|
-| CPU model | [TODO] |
-| Cores / logical threads | [TODO] |
-| Clock | [TODO] |
-| Caches | [TODO] |
-| RAM | [TODO] |
-| Host OS | [TODO] |
-| Linux environment | [TODO] |
-| Kernel | [TODO] |
-| C compiler | [TODO] |
-| Python (implementation and version) | [TODO] |
-| pandas / Matplotlib | [TODO] |
+| --- | --- |
+| CPU model | AMD Ryzen AI 5 330 w/ Radeon 820M |
+| Cores / logical threads | 4 cores / 8 threads |
+| Caches | L1d: 192 KiB, L1i: 128 KiB, L2: 4 MiB, L3: 8 MiB |
+| RAM | 15 GiB |
+| Host OS | Ubuntu 26.04 LTS |
+| Linux environment | WSL2 (Windows Subsystem for Linux) |
+| Kernel | 6.18.33.2-microsoft-standard-WSL2 |
+| C compiler | GCC 15.2.0 |
+| Python (implementation and version) | CPython 3.14.4 |
+| pandas / Matplotlib | pandas 3.0.3 / Matplotlib 3.10.9 |
 
 ---
 
@@ -403,7 +261,7 @@ big-data-assignments/
     │       └── sparse_mult.c    # Part B: dense -> CSR conversion and CSR x CSR kernel
     ├── results/                 # measurements, figures, summary (generated)
     ├── report/
-    │   └── main.tex             # research report (IEEE two-column, LaTeX) [TODO]
+    │   └── main.tex             # research report
     └── build/                   # compiled programs (generated, git-ignored)
 ```
 
