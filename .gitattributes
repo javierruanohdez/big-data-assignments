@@ -1,0 +1,17 @@
+# =============================================================================
+#  .gitattributes - line endings
+#  The repository stores every text file with Unix (LF) line endings, whatever
+#  the operating system or editor uses locally (Windows, WSL, macOS, Linux).
+#  Without this, files edited on Windows show up as "modified" in WSL even
+#  when only their line endings changed.
+# =============================================================================
+* text=auto eol=lf
+
+# Binary files: never convert their bytes.
+*.pdf   binary
+*.png   binary
+*.bin   binary
+*.class binary
+
+# Vendor LaTeX language.
+*.tex linguist-vendored
