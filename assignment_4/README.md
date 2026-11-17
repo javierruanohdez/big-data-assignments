@@ -501,13 +501,13 @@ worker count, block size and kernel it was asked for.
 | Threads per core (SMT) | 2 | `lscpu` → *Thread(s) per core* |
 | RAM | 15 GiB | `free -h` |
 | Linux environment | Ubuntu 26.04 LTS on WSL 2 | `lsb_release -d`, `wsl --version` (PowerShell) |
-| Clock (base / boost) | [TODO] | Manufacturer data sheet |
-| Caches | [TODO] | `lscpu` → *L1d*, *L2*, *L3* |
+| Clock (base / boost) | 2.0 GHz base; up to 4.5 GHz (1 Zen 5 core) and 3.4 GHz (3 Zen 5c cores) | Manufacturer data sheet |
+| Caches | L1d 48 KiB and L2 1 MiB per core; L3 8 MiB shared | `lscpu` → *L1d*, *L2*, *L3* |
 | Host OS | [TODO] | `winver` (Windows) |
-| Kernel | [TODO] | `uname -r` |
-| C compiler | [TODO] | `gcc --version` |
-| Python | [TODO] | `python3 --version` (also printed by `run_benchmark.py`) |
-| dask / distributed / NumPy / psutil | [TODO] | printed by `run_benchmark.py` |
+| Kernel | 6.18.33.2-microsoft-standard-WSL2 | `uname -r` |
+| C compiler | GCC 15.2.0 | `gcc --version` |
+| Python | CPython 3.14.4 | `python3 --version` (also printed by `run_benchmark.py`) |
+| dask / distributed / NumPy / psutil | 2026.8.0 / 2026.8.0 / 2.5.5 / 7.2.2 | printed by `run_benchmark.py` |
 | BLAS library | [TODO] | `python3 -c "import numpy; numpy.show_runtime()"` |
 | pandas / Matplotlib | [TODO] | `pip show pandas matplotlib` |
 | Power mode | [TODO] | Windows power settings |
