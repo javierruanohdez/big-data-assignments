@@ -29,10 +29,11 @@ The experiment:
         worker, and 16 tiles split evenly over 1, 2, 4 or 8 workers.
         reference: seq_python at every n_p
 
-Metrics for the report (computed later from the medians in the CSV):
-    speedup              S(p)   = T(seq_python, n) / T(distributed, p, n)
-                         (same kernel and tiles: isolates what distribution costs or gains)
+Metrics for the report (computed by plot_results.py from the medians in the CSV):
+    speedup              S(p)   = T(distributed, 1, n) / T(distributed, p, n)   (self-relative)
     efficiency           E(p)   = S(p) / p
+    gain vs. NumPy              T(seq_python, n) / T(distributed, p, n)
+                         (same kernel and tiles, no Dask: > 1 means distribution paid off)
     weak efficiency      E_w(p) = T(distributed, 1, n_1) / T(distributed, p, n_p)   (ideal: 1)
     overhead breakdown   setup_s, scatter_s, compute_s, gather_s
     communication        scatter, inter-worker (theoretical and measured) and gather bytes
@@ -105,7 +106,7 @@ STRONG_SIZES = [2000, 4000]
 #     split evenly over the process grids 1x1, 1x2, 2x2 and 2x4, so every
 #     worker owns the same number of C tiles (no load imbalance).
 #   - One task multiplies two 500 x 500 tiles: 2 * 500^3 = 0.25 GFLOP,
-#     about 10 ms with single-threaded BLAS. That is far above Dask's
+#     7-9 ms with single-threaded BLAS on the reference machine. That is far above Dask's
 #     scheduling cost per task (well under 1 ms), so the measurement is
 #     not dominated by bookkeeping.
 #   - Keeping b fixed across p means the same tasks are only distributed
