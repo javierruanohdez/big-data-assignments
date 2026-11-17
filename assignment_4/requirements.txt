@@ -1,0 +1,16 @@
+# Python packages for Assignment 4 (distributed_matmul.py, verify_correctness.py,
+# run_benchmark.py). Install with:  python3 -m pip install -r assignment_4/requirements.txt
+#
+# Requires Python 3.10 or newer. Lower bounds are the oldest versions with the
+# features the scripts use; upper bounds exclude future major versions, which
+# may break the API (Dask uses calendar versions, so it has no upper bound).
+#
+# Developed and tested with dask/distributed 2026.8.0, NumPy 2.5.3 and
+# psutil 7.2.2 on Python 3.13.
+#
+# Not Python packages, but needed for the C baselines (as in Assignments 2-3):
+# Linux or WSL, GCC >= 14 and GNU time (Debian/Ubuntu: sudo apt install gcc-14 time).
+
+dask[distributed]>=2024.1   # LocalCluster, scatter/submit with worker pinning, as_completed, transfer logs
+numpy>=1.24,<3              # tiles and the block kernel (matmul -> BLAS)
+psutil>=5.9,<8              # process memory and physical core count (also used by distributed)
